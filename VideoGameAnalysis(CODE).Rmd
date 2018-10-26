@@ -1,0 +1,165 @@
+---
+title: "Video Game Sales Analysis"
+author: "Alex Flores"
+date: "September 27, 2018"
+output:
+  
+  pdf_document: 
+    toc: yes
+    df_print: kable
+  html_document: 
+    toc: yes
+    df_print: paged
+---
+
+#Introduction
+  Before we begin, if you would like to see the data for yourself, please visit the following link: (https://data.world/julienf/video-games-global-sales-in-volume-1983-2017). 
+  
+  Video games are a integral part of the US economy. In 2015 alone, the video game industry alone contributed a total of **$11.7 BILLION** to the US gross domestic product accoring to the ESA(Entertainment Software Association). In addition, there are **2,568** game company locations in the US employing about 65,678 people. In total though, about **220 THOUSAND** people are directly or indirectly employed by the US game industry in 2015. 
+  With all this said, it is important to consider how video game sales have changed over time throughout the world. It is important to consider certain questions such as, are video game sales increasing or are they stagnating? It is important for economists to consider this because video games play an integral part of the US economy. With that being said, lets jump into our data so we can solve this question.
+  
+##Loading and checking the data
+  The first step is to load the packages we are going to be using. Then we change the working directory to where my Video Game files are located. After that we read the file into R via the read.csv function. Once we have done this, we can actually work with our sales data.
+  
+  *Note: All sales units are in millions*
+  
+
+```{r, echo=TRUE,message=FALSE}
+library("knitr")
+library("dplyr")
+library("tidyverse")
+setwd("C:\\Users\\flore\\Desktop\\Job Search Documents\\R Working Directory")
+sales <- read.csv("VideoGameSalesGlobal.csv")
+```
+\newpage
+```{r}
+head(sales,10)
+```
+  
+  The next step is to change the Year variable into a character and then into a integer so we can use the filter function on it. The reason we can't convert "Years" directly to an integer is because the "Year" data is stored internally as factors which already correspond to certain integers. We want to filter out the data that occurs before the Year 2016 because we want complete data and also we don't want predicitions. We also filter out all the incomplete, "N/A" years. 
+```{r, echo=TRUE,message=FALSE,warning=FALSE}
+sales$Year <- as.character(sales$Year)
+sales$Year <- as.integer(sales$Year)
+salesWithYear <- sales %>% 
+                        filter(Year<2016, Year!="N/A")
+```
+
+  The next thing we do is sum the total sales by years and graph the results. As we can see from the results. There is a **large spike** in sales between the years 2000 and 2008.
+```{r}
+salesGroupedbyYear <- salesWithYear %>% 
+                        group_by(Year) %>% 
+                          summarise(Total_Sales = sum(Global_Sales)) 
+ggplot(salesGroupedbyYear,
+       aes(x=Year,y=Total_Sales)) + 
+        geom_point() + 
+        ggtitle("Video Game Sales") + 
+        labs(y="Total Sales",x="Year")
+```
+
+##Question: How much did sales increase on average each year between 2000 and 2008?
+  
+  To answer this question we can run a linear regression between the years between 2000 and 2008. First, I must filter the dataset between the years 2000 and 2008 then I can run a linear regression on the data. Then I summarize my linear model in R using the coeff function. From the linear regression, we can see that sales increased on average of roughly **51.70 Million Units** each year between 2000 and 2008.
+```{r}
+outlierSales <-salesGroupedbyYear %>% 
+                filter(Year>1999,Year<2009)
+ggplot(outlierSales, aes(x=Year,y=Total_Sales)) +
+  geom_point() +
+  ggtitle("Video Game Sales") + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(y="Total Sales",x="Year")
+LinearModel <- lm(Total_Sales ~ Year, outlierSales)
+coef(LinearModel)
+```
+
+##Question: Are all of the countries in the dataset following the same trend as the global sales data?
+  
+  We can see that video game sales do increase around the world greatly between the years 2000 and 2008 but we can't tell exactly how much each specific country grows within this time period. This made me curious as to how much exactly each country is growing in sales over time. This leads to my next question...
+
+```{r}
+salesGroupedbyCountry <- salesWithYear %>% 
+                          group_by(Year) %>% 
+                            summarise(Total_NA=sum(NA_Sales),
+                                      Total_EU=sum(EU_Sales),
+                                      Total_JP=sum(JP_Sales))
+ggplot(salesGroupedbyCountry,aes(Year)) + 
+  geom_line(aes(y=Total_JP,color="red"),size=1.5) + 
+  geom_line(aes(y=Total_EU,color="green"),size=1.5) + 
+  geom_line(aes(y=Total_NA,color="blue"),size=1.5) +
+  ggtitle("Video Game Sales by Country") + 
+  labs(y="Total Sales by Country",x="Year") +
+  guides(color=guide_legend("Country")) + 
+  scale_color_manual(labels = c("North America", "Europe","Japan"), 
+                     values = c("blue", "green","red"))
+```
+
+##How much did exactly did each country increase in sales on average, in each year between 2000 and 2008?
+  We can tell exactly how much sales increased on average, by each year, respective to each country. If we take a look at the beta coefficient in our linear regression, we can see that Japan only increased sales by an average of **3.59 million** sales each year between 2000-2008. In contrast, Europe increased sales by an average of **13.01 million** sales beating out Japan. However, in these years North America was able to increase sales the most on average with an average increase of **26.41 million** sales each year between 2000-2008.
+  
+```{r,results="hide"}
+salesSummary <- sales[c(4,7:9)]
+salesSummary <- salesSummary %>% 
+                  arrange(Year)
+salesSummary <- salesSummary %>% 
+                  group_by(Year) %>% 
+                    filter(Year>1999,Year<2009) %>%
+                    summarise(North_America=sum(NA_Sales),
+                              Europe=sum(EU_Sales),
+                              Japan=sum(JP_Sales))
+NorthAmerica <- lm(North_America ~ Year, salesSummary)
+Europe <- lm(Europe ~ Year, salesSummary)
+Japan <- lm(Japan ~ Year, salesSummary)
+coef(NorthAmerica)
+coef(Europe)
+coef(Japan)
+```
+```{r}
+salesSummary <- gather(salesSummary,Country,Sales,-Year)
+ggplot(salesSummary,aes(x=Year,y=Sales)) +
+  geom_point() + 
+  geom_smooth(method = "lm",se=FALSE)+facet_wrap(.~Country,scales='free_y') + 
+  labs(title="Sales By Country",y="Total Sales")
+```
+
+##Question: Which genres in North America caused such a rapid increase in sales between the years 2000 and 2008 for North America?
+
+  The first step, as usual is to create a data frame that we can work with using dplyr's group by and summarise verbs. We filter this new data table with three variables for the years between 2000-2008 and graph that data we create. From this graph, we can see that no one genre compeletely dominates the sales over time however, we can roughly see that Action and Sports games sell the most. This leads to my next question...
+
+```{r}
+salesByGenre <- salesWithYear %>% 
+                  group_by(Year,Genre) %>% 
+                  summarise(Total_NA_Sales=sum(NA_Sales))
+salesByGenre <- salesByGenre %>%
+                  filter(Year>1999,Year<2009)
+ggplot(salesByGenre, aes(x=Year, y = Total_NA_Sales, fill = Genre)) + 
+  geom_bar(stat="identity") + 
+  labs(y="Total North American Sales",x="Year")
+```
+
+##Question: What percent of North American video games sold in between 2000 and 2008, were the result of Sports and Actions games?
+
+  To do this we must filter our dataset first, then we can sum the total amount of North American Action and Sports games between 2000 and 2008. Afterwards, we can divide by the total amount of sales to find out that almost **1/5** of all Sales in this time period came from Action and Sports games.
+```{r}
+GlobalSales <- salesWithYear %>% 
+                filter(Year>1999,Year<2009) %>% 
+                summarise((sum(Global_Sales)))
+salesWithYear$Genre <- as.character(salesWithYear$Genre)
+NA_Sales_Action_Sports <- salesWithYear %>% 
+                          filter(Year>1999,Year<2009) %>% 
+                          filter(Genre %in% c("Action","Sports")) %>% 
+                          summarise(sum(NA_Sales))
+NumberOfSales<-(as.integer(NA_Sales_Action_Sports))/as.integer(GlobalSales)
+print(paste0("Action and Sport Games as a Percentage of Total Sales between 2000-2008: ", 
+             round(NumberOfSales*100,digits = 2),
+             "%"))
+```
+
+\newpage
+#Summary
+* **Video game sales peaked around the year 2008.**
+    + This peak is not the same for Japan which peaked slightly earlier.
+* **Sales increased an average of 51.70 Million Units each year between 2000 and 2008.**
+    + This also varied widely between countries. For the US, it was **26.41 million** and 
+    for Europe is was **13.01 million** however for Japan it was only **3.59 million**.
+* **No single Genre dominated the video games sales industry however, Sports and Action games sold the most.**
+    + Between 2000-2008, Sports and Action games accounted for almost **1/5** of all video 
+    game sales.
